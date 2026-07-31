@@ -31,6 +31,8 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Build static site
+        env:
+          VITE_REPO_NAME: ${{ github.event.repository.name }}
         run: bun run build:client
 
       - name: Upload Pages artifact
