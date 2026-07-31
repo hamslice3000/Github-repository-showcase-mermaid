@@ -1,40 +1,464 @@
 import React, { useState } from 'react';
 import { FullRepoResponse, ThemeStyle } from '../types';
-import { Code2, Copy, Check, Share2, Layers, ShieldCheck, Terminal } from 'lucide-react';
+import { Code2, Copy, Check, Share2, Layers, ShieldCheck, Terminal, FileCode, FileType, Braces, Package } from 'lucide-react';
 
 interface EmbedCodeGeneratorProps {
   data: FullRepoResponse;
   activeTheme: ThemeStyle;
 }
 
+type EmbedType = 'iframe' | 'react' | 'tailwind' | 'markdown' | 'html' | 'css' | 'javascript' | 'combined';
+
+// Safely escape a string for use inside HTML attribute values (double-quoted)
+function escAttr(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+// Safely escape a string for use inside HTML text content
+function escHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+// Safely escape a string for use inside a JS string literal (single-quoted)
+function escJs(value: string): string {
+  return value
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/\r/g, '\\r')
+    .replace(/\n/g, '\\n')
+    .replace(/<\/script>/gi, '<\\/script>');
+}
+
 export const EmbedCodeGenerator: React.FC<EmbedCodeGeneratorProps> = ({ data, activeTheme }) => {
   const { repo } = data;
-  const [embedType, setEmbedType] = useState<'iframe' | 'react' | 'tailwind' | 'markdown'>('tailwind');
+  const [embedType, setEmbedType] = useState<EmbedType>('tailwind');
   const [copied, setCopied] = useState(false);
 
-  // Generate code snippets for each format
+  // ── Existing snippet generators ──────────────────────────────────────────
+
   const getIframeCode = () => {
-    return `<iframe\n  src="${window.location.origin}/embed?repo=${encodeURIComponent(repo.full_name)}&theme=${activeTheme}"\n  width="100%"\n  height="240"\n  style="border: none; border-radius: 12px; overflow: hidden;"\n  title="${repo.full_name} GitHub Showcase"\n></iframe>`;
+    return `<iframe\n  src="${window.location.origin}/embed?repo=${encodeURIComponent(repo.full_name)}&theme=${activeTheme}"\n  width="100%"\n  height="240"\n  style="border: none; border-radius: 12px; overflow: hidden;"\n  title="${escAttr(repo.full_name)} GitHub Showcase"\n></iframe>`;
   };
 
   const getReactCode = () => {
-    return `import React from 'react';\n\nexport function GitHubRepoCard() {\n  return (\n    <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 text-slate-100 max-w-md shadow-xl">\n      <div className="flex items-center gap-3">\n        <img src="${repo.owner.avatar_url}" alt="${repo.owner.login}" className="w-10 h-10 rounded-xl" />\n        <div>\n          <h3 className="font-bold text-base text-white">${repo.name}</h3>\n          <p className="text-xs text-slate-400">${repo.owner.login}</p>\n        </div>\n      </div>\n      <p className="text-xs text-slate-300 mt-2.5 line-clamp-2">${repo.description || ''}</p>\n      <div className="flex items-center justify-between mt-4 text-xs font-mono text-slate-400 pt-3 border-t border-slate-800">\n        <span>⭐ ${repo.stargazers_count.toLocaleString()}</span>\n        <span>🍴 ${repo.forks_count.toLocaleString()}</span>\n        <span className="text-indigo-400 font-semibold">${repo.language || 'Code'}</span>\n      </div>\n    </div>\n  );\n}`;
+    return `import React from 'react';
+
+export function GitHubRepoCard() {
+  return (
+    <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 text-slate-100 max-w-md shadow-xl">
+      <div className="flex items-center gap-3">
+        <img src="${escAttr(repo.owner.avatar_url)}" alt="${escAttr(repo.owner.login)}" className="w-10 h-10 rounded-xl" />
+        <div>
+          <h3 className="font-bold text-base text-white">${escHtml(repo.name)}</h3>
+          <p className="text-xs text-slate-400">${escHtml(repo.owner.login)}</p>
+        </div>
+      </div>
+      <p className="text-xs text-slate-300 mt-2.5 line-clamp-2">${escHtml(repo.description || '')}</p>
+      <div className="flex items-center justify-between mt-4 text-xs font-mono text-slate-400 pt-3 border-t border-slate-800">
+        <span>⭐ ${repo.stargazers_count.toLocaleString()}</span>
+        <span>🍴 ${repo.forks_count.toLocaleString()}</span>
+        <span className="text-indigo-400 font-semibold">${escHtml(repo.language || 'Code')}</span>
+      </div>
+    </div>
+  );
+}`;
   };
 
   const getTailwindCode = () => {
-    return `<!-- GitHub Repository Presentation Card -->\n<div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 text-slate-100 max-w-lg shadow-xl hover:border-indigo-500/40 transition-all">\n  <div className="flex items-center justify-between">\n    <div className="flex items-center gap-3">\n      <img src="${repo.owner.avatar_url}" alt="${repo.owner.login}" className="w-10 h-10 rounded-xl border border-slate-700" />\n      <div>\n        <a href="${repo.html_url}" target="_blank" className="font-bold text-base text-white hover:underline">${repo.full_name}</a>\n        <div className="text-xs text-slate-400">${repo.language ? repo.language : 'Repository'} • ${repo.license ? repo.license : 'Open Source'}</div>\n      </div>\n    </div>\n    <a href="${repo.html_url}" target="_blank" className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold">View Repo</a>\n  </div>\n  <p className="text-xs text-slate-300 mt-3 leading-relaxed">${repo.description || ''}</p>\n  <div className="flex items-center gap-4 mt-4 text-xs font-mono text-slate-400 pt-3 border-t border-slate-800/80">\n    <span>⭐ ${repo.stargazers_count.toLocaleString()} stars</span>\n    <span>🍴 ${repo.forks_count.toLocaleString()} forks</span>\n  </div>\n</div>`;
+    return `<!-- GitHub Repository Presentation Card -->
+<div class="p-5 rounded-2xl bg-slate-900 border border-slate-800 text-slate-100 max-w-lg shadow-xl hover:border-indigo-500/40 transition-all">
+  <div class="flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <img src="${escAttr(repo.owner.avatar_url)}" alt="${escAttr(repo.owner.login)}" class="w-10 h-10 rounded-xl border border-slate-700" />
+      <div>
+        <a href="${escAttr(repo.html_url)}" target="_blank" rel="noopener noreferrer" class="font-bold text-base text-white hover:underline">${escHtml(repo.full_name)}</a>
+        <div class="text-xs text-slate-400">${escHtml(repo.language || 'Repository')} &bull; ${escHtml(repo.license || 'Open Source')}</div>
+      </div>
+    </div>
+    <a href="${escAttr(repo.html_url)}" target="_blank" rel="noopener noreferrer" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold">View Repo</a>
+  </div>
+  <p class="text-xs text-slate-300 mt-3 leading-relaxed">${escHtml(repo.description || '')}</p>
+  <div class="flex items-center gap-4 mt-4 text-xs font-mono text-slate-400 pt-3 border-t border-slate-800/80">
+    <span>⭐ ${repo.stargazers_count.toLocaleString()} stars</span>
+    <span>🍴 ${repo.forks_count.toLocaleString()} forks</span>
+  </div>
+</div>`;
   };
 
   const getMarkdownCode = () => {
-    return `[![${repo.full_name} GitHub Showcase](https://img.shields.io/github/stars/${repo.full_name}?style=for-the-badge&logo=github&color=6366f1)](https://github.com/${repo.full_name})\n[![License](https://img.shields.io/github/license/${repo.full_name}?style=for-the-badge&color=10b981)](https://github.com/${repo.full_name})`;
+    return `[![${repo.full_name} GitHub Showcase](https://img.shields.io/github/stars/${repo.full_name}?style=for-the-badge&logo=github&color=6366f1)](https://github.com/${repo.full_name})
+[![License](https://img.shields.io/github/license/${repo.full_name}?style=for-the-badge&color=10b981)](https://github.com/${repo.full_name})`;
   };
 
-  const getCurrentSnippet = () => {
+  // ── New standalone HTML/CSS/JS generators ────────────────────────────────
+
+  const getHtmlCode = () => {
+    return `<!-- GitHub Repository Card — plain HTML (link repo-card.css and repo-card.js) -->
+<div class="repo-card" id="repo-card">
+  <div class="repo-card__header">
+    <img
+      class="repo-card__avatar"
+      src="${escAttr(repo.owner.avatar_url)}"
+      alt="${escAttr(repo.owner.login)}"
+    />
+    <div class="repo-card__meta">
+      <a
+        class="repo-card__name"
+        href="${escAttr(repo.html_url)}"
+        target="_blank"
+        rel="noopener noreferrer"
+      >${escHtml(repo.full_name)}</a>
+      <span class="repo-card__language">${escHtml(repo.language || 'Repository')}</span>
+    </div>
+    <a
+      class="repo-card__btn"
+      href="${escAttr(repo.html_url)}"
+      target="_blank"
+      rel="noopener noreferrer"
+    >View Repo</a>
+  </div>
+  <p class="repo-card__description">${escHtml(repo.description || '')}</p>
+  <div class="repo-card__stats">
+    <span class="repo-card__stat">&#11088; <strong class="repo-card__stars">${repo.stargazers_count.toLocaleString()}</strong> stars</span>
+    <span class="repo-card__stat">&#127860; <strong class="repo-card__forks">${repo.forks_count.toLocaleString()}</strong> forks</span>
+    <span class="repo-card__stat">&#10007; <strong class="repo-card__issues">${repo.open_issues_count.toLocaleString()}</strong> issues</span>
+  </div>
+</div>`;
+  };
+
+  const getCssCode = () => {
+    return `/* ── GitHub Repository Card ─────────────────────────────────────────── */
+/* Drop this file alongside repo-card.html and repo-card.js             */
+
+.repo-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+  max-width: 480px;
+  border-radius: 16px;
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  color: #e2e8f0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial,
+    sans-serif;
+  font-size: 13px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.repo-card:hover {
+  border-color: rgba(99, 102, 241, 0.5);
+  box-shadow: 0 6px 32px rgba(99, 102, 241, 0.15);
+}
+
+/* Header ─────────────────────────────────────────────────────────────── */
+.repo-card__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.repo-card__avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid #334155;
+  flex-shrink: 0;
+}
+
+.repo-card__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.repo-card__name {
+  font-weight: 700;
+  font-size: 14px;
+  color: #f1f5f9;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.repo-card__name:hover {
+  text-decoration: underline;
+}
+
+.repo-card__language {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.repo-card__btn {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  background: #4f46e5;
+  color: #fff;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.15s ease;
+}
+
+.repo-card__btn:hover {
+  background: #6366f1;
+}
+
+/* Description ────────────────────────────────────────────────────────── */
+.repo-card__description {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #cbd5e1;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Stats ──────────────────────────────────────────────────────────────── */
+.repo-card__stats {
+  display: flex;
+  gap: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #1e293b;
+}
+
+.repo-card__stat {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.repo-card__stat strong {
+  color: #e2e8f0;
+  font-weight: 600;
+}
+
+/* Light theme — add class="repo-card repo-card--light" for light mode ── */
+.repo-card--light {
+  background: #ffffff;
+  border-color: #e2e8f0;
+  color: #1e293b;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+.repo-card--light:hover {
+  border-color: rgba(99, 102, 241, 0.4);
+}
+
+.repo-card--light .repo-card__name {
+  color: #0f172a;
+}
+
+.repo-card--light .repo-card__language,
+.repo-card--light .repo-card__stat {
+  color: #64748b;
+}
+
+.repo-card--light .repo-card__stat strong {
+  color: #1e293b;
+}
+
+.repo-card--light .repo-card__description {
+  color: #334155;
+}
+
+.repo-card--light .repo-card__stats {
+  border-top-color: #e2e8f0;
+}
+
+.repo-card--light .repo-card__avatar {
+  border-color: #cbd5e1;
+}`;
+  };
+
+  const getJsCode = () => {
+    return `/**
+ * GitHub Repository Card — Vanilla JS
+ * ─────────────────────────────────────────────────────────────────────────
+ * Usage:
+ *   1. Add <div id="repo-card"></div> (or any element with data-repo) to
+ *      your page and include this script.
+ *   2. Optionally pass a GitHub repo slug to renderRepoCard() to fetch
+ *      live data and inject it into the card.
+ *
+ * The card HTML + CSS selectors match repo-card.html / repo-card.css.
+ * ─────────────────────────────────────────────────────────────────────────
+ */
+
+(function () {
+  'use strict';
+
+  /* Default data baked in at export time ---------------------------------- */
+  var REPO_DATA = {
+    full_name:        '${escJs(repo.full_name)}',
+    name:             '${escJs(repo.name)}',
+    html_url:         '${escJs(repo.html_url)}',
+    description:      '${escJs(repo.description || '')}',
+    owner_login:      '${escJs(repo.owner.login)}',
+    owner_avatar_url: '${escJs(repo.owner.avatar_url)}',
+    language:         '${escJs(repo.language || '')}',
+    stargazers_count: ${repo.stargazers_count},
+    forks_count:      ${repo.forks_count},
+    open_issues_count:${repo.open_issues_count},
+  };
+
+  /* Helpers ---------------------------------------------------------------- */
+  function esc(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function fmtNum(n) {
+    return Number(n).toLocaleString();
+  }
+
+  /* Render ----------------------------------------------------------------- */
+  function renderCard(el, d) {
+    el.className = 'repo-card';
+    el.innerHTML =
+      '<div class="repo-card__header">' +
+        '<img class="repo-card__avatar" src="' + esc(d.owner_avatar_url) + '" alt="' + esc(d.owner_login) + '" />' +
+        '<div class="repo-card__meta">' +
+          '<a class="repo-card__name" href="' + esc(d.html_url) + '" target="_blank" rel="noopener noreferrer">' + esc(d.full_name) + '</a>' +
+          '<span class="repo-card__language">' + esc(d.language || 'Repository') + '</span>' +
+        '</div>' +
+        '<a class="repo-card__btn" href="' + esc(d.html_url) + '" target="_blank" rel="noopener noreferrer">View Repo</a>' +
+      '</div>' +
+      '<p class="repo-card__description">' + esc(d.description) + '</p>' +
+      '<div class="repo-card__stats">' +
+        '<span class="repo-card__stat">&#11088; <strong class="repo-card__stars">' + fmtNum(d.stargazers_count) + '</strong> stars</span>' +
+        '<span class="repo-card__stat">&#127860; <strong class="repo-card__forks">' + fmtNum(d.forks_count) + '</strong> forks</span>' +
+        '<span class="repo-card__stat">&#10007; <strong class="repo-card__issues">' + fmtNum(d.open_issues_count) + '</strong> issues</span>' +
+      '</div>';
+  }
+
+  /**
+   * Fetch live GitHub API data and re-render the card.
+   * @param {string} repoSlug  e.g. "owner/repo"
+   * @param {string} [selector] CSS selector for the card element (default: "#repo-card")
+   */
+  function renderRepoCard(repoSlug, selector) {
+    var el = document.querySelector(selector || '#repo-card');
+    if (!el) return;
+
+    // Render immediately with baked-in data while fetching
+    renderCard(el, REPO_DATA);
+
+    fetch('https://api.github.com/repos/' + encodeURIComponent(repoSlug))
+      .then(function (res) {
+        if (!res.ok) throw new Error('GitHub API error ' + res.status);
+        return res.json();
+      })
+      .then(function (r) {
+        renderCard(el, {
+          full_name:         r.full_name        || repoSlug,
+          name:              r.name             || repoSlug,
+          html_url:          r.html_url         || '',
+          description:       r.description      || '',
+          owner_login:       (r.owner && r.owner.login)      || '',
+          owner_avatar_url:  (r.owner && r.owner.avatar_url) || '',
+          language:          r.language         || '',
+          stargazers_count:  r.stargazers_count  || 0,
+          forks_count:       r.forks_count       || 0,
+          open_issues_count: r.open_issues_count || 0,
+        });
+      })
+      .catch(function (err) {
+        console.warn('[repo-card] Could not fetch live data:', err);
+      });
+  }
+
+  /* Auto-init -------------------------------------------------------------- */
+  // Render all elements that carry data-repo="owner/repo"
+  document.querySelectorAll('[data-repo]').forEach(function (el) {
+    renderRepoCard(el.getAttribute('data-repo'), null);
+    // Override selector to target this specific element
+    el.id = el.id || 'repo-card';
+  });
+
+  // Also render the default #repo-card if it exists and has no data-repo
+  var defaultEl = document.getElementById('repo-card');
+  if (defaultEl && !defaultEl.getAttribute('data-repo')) {
+    renderCard(defaultEl, REPO_DATA);
+  }
+
+  /* Public API ------------------------------------------------------------- */
+  window.RepoCard = { render: renderRepoCard };
+}());`;
+  };
+
+  const getCombinedCode = () => {
+    const css = getCssCode();
+    const js = getJsCode();
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${escHtml(repo.full_name)} — Repository Card</title>
+  <style>
+/* ── Reset ────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #020617;
+  padding: 32px 16px;
+}
+
+${css}
+  </style>
+</head>
+<body>
+
+  <!--
+    GitHub Repository Card — Self-contained embed
+    ─────────────────────────────────────────────
+    • Copy this entire file and open it in any browser, or paste the
+      <div> and the <style>/<script> blocks into your own page.
+    • To display a different repo, change data-repo below.
+    • Live data is fetched from the GitHub API automatically.
+  -->
+  <div id="repo-card" data-repo="${escAttr(repo.full_name)}"></div>
+
+  <script>
+${js}
+  </script>
+
+</body>
+</html>`;
+  };
+
+  const getCurrentSnippet = (): string => {
     switch (embedType) {
-      case 'iframe': return getIframeCode();
-      case 'react': return getReactCode();
-      case 'tailwind': return getTailwindCode();
-      case 'markdown': return getMarkdownCode();
+      case 'iframe':      return getIframeCode();
+      case 'react':       return getReactCode();
+      case 'tailwind':    return getTailwindCode();
+      case 'markdown':    return getMarkdownCode();
+      case 'html':        return getHtmlCode();
+      case 'css':         return getCssCode();
+      case 'javascript':  return getJsCode();
+      case 'combined':    return getCombinedCode();
     }
   };
 
@@ -44,6 +468,18 @@ export const EmbedCodeGenerator: React.FC<EmbedCodeGeneratorProps> = ({ data, ac
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // Tab group definitions to keep the UI organised
+  const tabs: { id: EmbedType; label: string }[] = [
+    { id: 'combined',   label: 'Combined (HTML + CSS + JS)' },
+    { id: 'html',       label: 'HTML' },
+    { id: 'css',        label: 'CSS' },
+    { id: 'javascript', label: 'JavaScript' },
+    { id: 'tailwind',   label: 'HTML / Tailwind' },
+    { id: 'react',      label: 'React (JSX)' },
+    { id: 'iframe',     label: 'iFrame' },
+    { id: 'markdown',   label: 'Markdown Badges' },
+  ];
+
   return (
     <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800">
@@ -51,7 +487,7 @@ export const EmbedCodeGenerator: React.FC<EmbedCodeGeneratorProps> = ({ data, ac
           <Share2 className="w-5 h-5 text-indigo-400" />
           <div>
             <h3 className="text-sm font-semibold text-slate-100">
-              Embed & Export Code Snippet
+              Embed &amp; Export Code Snippet
             </h3>
             <p className="text-xs text-slate-400">
               Copy production-ready code to present this repository on your website or portfolio.
@@ -79,50 +515,42 @@ export const EmbedCodeGenerator: React.FC<EmbedCodeGeneratorProps> = ({ data, ac
 
       {/* Snippet Format Selector */}
       <div className="flex flex-wrap gap-2">
-        <button
-          onClick={() => setEmbedType('tailwind')}
-          className={`px-3 py-1.5 text-xs font-medium rounded-xl border transition-all ${
-            embedType === 'tailwind'
-              ? 'bg-indigo-600 text-white border-indigo-500'
-              : 'bg-slate-950/60 text-slate-400 border-slate-800 hover:text-slate-200'
-          }`}
-        >
-          HTML / Tailwind Card
-        </button>
-
-        <button
-          onClick={() => setEmbedType('react')}
-          className={`px-3 py-1.5 text-xs font-medium rounded-xl border transition-all ${
-            embedType === 'react'
-              ? 'bg-indigo-600 text-white border-indigo-500'
-              : 'bg-slate-950/60 text-slate-400 border-slate-800 hover:text-slate-200'
-          }`}
-        >
-          React Component (JSX)
-        </button>
-
-        <button
-          onClick={() => setEmbedType('iframe')}
-          className={`px-3 py-1.5 text-xs font-medium rounded-xl border transition-all ${
-            embedType === 'iframe'
-              ? 'bg-indigo-600 text-white border-indigo-500'
-              : 'bg-slate-950/60 text-slate-400 border-slate-800 hover:text-slate-200'
-          }`}
-        >
-          HTML iFrame
-        </button>
-
-        <button
-          onClick={() => setEmbedType('markdown')}
-          className={`px-3 py-1.5 text-xs font-medium rounded-xl border transition-all ${
-            embedType === 'markdown'
-              ? 'bg-indigo-600 text-white border-indigo-500'
-              : 'bg-slate-950/60 text-slate-400 border-slate-800 hover:text-slate-200'
-          }`}
-        >
-          Markdown Badges
-        </button>
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setEmbedType(tab.id)}
+            className={`px-3 py-1.5 text-xs font-medium rounded-xl border transition-all ${
+              embedType === tab.id
+                ? 'bg-indigo-600 text-white border-indigo-500'
+                : 'bg-slate-950/60 text-slate-400 border-slate-800 hover:text-slate-200'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
+
+      {/* Mode description hints */}
+      {embedType === 'html' && (
+        <p className="text-xs text-slate-500">
+          Semantic HTML markup for the card. Pair with the <strong className="text-slate-400">CSS</strong> and <strong className="text-slate-400">JavaScript</strong> exports, or use the <strong className="text-slate-400">Combined</strong> export for a single self-contained file.
+        </p>
+      )}
+      {embedType === 'css' && (
+        <p className="text-xs text-slate-500">
+          Standalone stylesheet for the card. Save as <code className="text-slate-400">repo-card.css</code> and link it from your page.
+        </p>
+      )}
+      {embedType === 'javascript' && (
+        <p className="text-xs text-slate-500">
+          Vanilla JS widget. Renders the card with baked-in data and optionally fetches live stats from the GitHub API. Save as <code className="text-slate-400">repo-card.js</code>.
+        </p>
+      )}
+      {embedType === 'combined' && (
+        <p className="text-xs text-slate-500">
+          A fully self-contained HTML page — includes inline CSS and JS. Open it directly in a browser or paste the relevant blocks into your own page. No build tools, no framework, no CDN required.
+        </p>
+      )}
 
       {/* Code Display Area */}
       <div className="relative">
