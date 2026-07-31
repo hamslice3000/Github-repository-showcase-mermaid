@@ -28,3 +28,8 @@ test('HTML/CSS/JS exports include parity sections and functional diagram tabs', 
   assert.match(source, /window\.RepoCard = \{ render: renderRepoCard \}/);
   assert.match(source, /cdn\.jsdelivr\.net\/npm\/mermaid@11\/dist\/mermaid\.min\.js/);
 });
+
+test('iFrame and Markdown snippets include full-card parity guidance text', () => {
+  assert.match(source, /Full-card parity: this iframe renders the complete repository showcase card from \/embed/);
+  assert.match(source, /\*\*Full-card parity note:\*\* Markdown is badge-only/);
+});

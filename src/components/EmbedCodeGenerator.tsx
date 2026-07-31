@@ -45,7 +45,8 @@ export const EmbedCodeGenerator: React.FC<EmbedCodeGeneratorProps> = ({ data, ac
   // ── Existing snippet generators ──────────────────────────────────────────
 
   const getIframeCode = () => {
-    return `<iframe\n  src="${window.location.origin}/embed?repo=${encodeURIComponent(repo.full_name)}&theme=${activeTheme}"\n  width="100%"\n  height="240"\n  style="border: none; border-radius: 12px; overflow: hidden;"\n  title="${escAttr(repo.full_name)} GitHub Showcase"\n></iframe>`;
+    return `<!-- Full-card parity: this iframe renders the complete repository showcase card from /embed (header, diagrams, tech stack, and structure). -->
+<iframe\n  src="${window.location.origin}/embed?repo=${encodeURIComponent(repo.full_name)}&theme=${activeTheme}"\n  width="100%"\n  height="240"\n  style="border: none; border-radius: 12px; overflow: hidden;"\n  title="${escAttr(repo.full_name)} GitHub Showcase"\n></iframe>`;
   };
 
   const getExportCardData = () => {
@@ -355,7 +356,9 @@ export function GitHubRepoCard({ renderWebArchitecture } = {}) {
   };
 
   const getMarkdownCode = () => {
-    return `[![${repo.full_name} GitHub Showcase](https://img.shields.io/github/stars/${repo.full_name}?style=for-the-badge&logo=github&color=6366f1)](https://github.com/${repo.full_name})
+    return `> **Full-card parity note:** Markdown is badge-only; use iFrame or Combined (HTML + CSS + JS) snippets for the complete interactive showcase card.
+
+[![${repo.full_name} GitHub Showcase](https://img.shields.io/github/stars/${repo.full_name}?style=for-the-badge&logo=github&color=6366f1)](https://github.com/${repo.full_name})
 [![License](https://img.shields.io/github/license/${repo.full_name}?style=for-the-badge&color=10b981)](https://github.com/${repo.full_name})`;
   };
 
